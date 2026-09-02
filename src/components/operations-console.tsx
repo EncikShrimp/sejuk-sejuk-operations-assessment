@@ -361,7 +361,7 @@ export function OperationsConsole({ initialSnapshot, defaultScheduledAt, role }:
 
   return (
     <main className="min-h-dvh bg-[#f4f7f5] text-slate-900">
-      <div className="mx-auto grid min-h-dvh max-w-[1536px] lg:grid-cols-[236px_minmax(0,1fr)]">
+      <div className="grid min-h-dvh lg:grid-cols-[236px_minmax(0,1fr)]">
         <aside className="hidden border-r border-slate-200 bg-[#123b38] px-4 py-5 text-white lg:flex lg:flex-col">
           <div className="flex items-center gap-3 px-2"><div className="grid size-9 place-items-center rounded-xl bg-[#dbf06d] text-[#123b38]"><Wrench className="size-5" /></div><div><p className="text-sm font-bold tracking-tight">Sejuk Sejuk</p><p className="text-[10px] uppercase tracking-[0.16em] text-teal-100/70">Operations</p></div></div>
           <nav className="mt-10 space-y-1" aria-label="Primary">
