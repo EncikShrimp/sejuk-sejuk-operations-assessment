@@ -1,12 +1,18 @@
 # Sejuk Sejuk Operations Assessment
 
-Local Next.js assessment for a fictional Malaysian air-conditioner service operation. It demonstrates the workflow `New → Assigned → In Progress → Job Done → Reviewed → Closed`; it is not a production-auth claim.
+Next.js assessment for a fictional Malaysian air-conditioner service operation. It demonstrates the workflow `New → Assigned → In Progress → Job Done → Reviewed → Closed`; it is not a production-auth claim.
+
+## Live demo
+
+[Open the live assessment demo](https://sejuk-sejuk-operations-assessment.vercel.app)
+
+The hosted demo uses fictional seeded jobs. Login is an assessment-only role selector, not production authentication.
 
 ## Tech stack
 
 - Next.js 16 + React + TypeScript
 - Tailwind CSS v4
-- Local Supabase (Postgres, Storage, versioned migrations and seed data)
+- Supabase (Postgres, private Storage, versioned migrations and fictional demo seed data)
 - DeepSeek, server-side only, for the bounded Operations AI query window
 - Vitest, ESLint and TypeScript checks
 
