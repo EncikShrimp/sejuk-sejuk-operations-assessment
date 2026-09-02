@@ -1,0 +1,1 @@
+Synthetic local QA fixture. Its HTTP multipart content type is explicitly set by the test harness; it is never sent to a production service.
