@@ -28,6 +28,7 @@ import { formatOrderNumber } from "@/lib/domain/order-number";
 import { MAX_EVIDENCE_FILES, evidenceFileLimitMessage } from "@/lib/domain/evidence";
 import { fieldMetadataFor } from "@/lib/domain/form-field-metadata";
 import { centsFromInput, formatRinggit } from "@/lib/domain/money";
+import { sortOrdersNewestCreatedFirst } from "@/lib/domain/order-sort";
 import type {
   OperationsSnapshot,
   OrderStatus,
@@ -135,7 +136,7 @@ export function OperationsConsole({ initialSnapshot, defaultScheduledAt, role }:
   const router = useRouter();
   const [view, setView] = useState<View>(nextView(role));
   const [orders, setOrders] = useState<ServiceOrder[]>(initialSnapshot.orders);
-  const [selectedTechnicianId] = useState(initialSnapshot.technicians[0]?.id ?? "");
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState(initialSnapshot.technicians[0]?.id ?? "");
   const [notice, setNotice] = useState<Notice>(null);
   const [orderFieldErrors, setOrderFieldErrors] = useState<FieldErrors>({});
   const [completionFieldErrors, setCompletionFieldErrors] = useState<FieldErrors>({});
@@ -145,8 +146,9 @@ export function OperationsConsole({ initialSnapshot, defaultScheduledAt, role }:
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiState, setAiState] = useState<{ loading: boolean; message: string | null; answer: string | null }>({ loading: false, message: null, answer: null });
 
-  const sourceLabel = initialSnapshot.source === "supabase" ? "Local Supabase" : "Seeded preview";
+  const sourceLabel = initialSnapshot.source === "supabase" ? "Supabase data" : "Seeded preview";
   const activeTechnician = initialSnapshot.technicians.find((technician) => technician.id === selectedTechnicianId) ?? initialSnapshot.technicians[0];
+  const orderRegister = useMemo(() => sortOrdersNewestCreatedFirst(orders), [orders]);
   const dashboard = useMemo(() => {
     const today = new Date();
     const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -357,6 +359,13 @@ export function OperationsConsole({ initialSnapshot, defaultScheduledAt, role }:
   const technicianJobs = orders.filter((order) => order.assignedTechnicianId === activeTechnician?.id && !["job_done", "reviewed", "closed"].includes(order.status));
   const managerQueue = orders.filter((order) => ["job_done", "reviewed"].includes(order.status));
 
+  function changeMockTechnician(technicianId: string) {
+    setSelectedTechnicianId(technicianId);
+    setCompletionOrderId(null);
+    setSelectedFiles([]);
+    setCompletionFieldErrors({});
+  }
+
   const availableNav = nav.filter(({ roles }) => roles.includes(role));
 
   return (
@@ -384,8 +393,8 @@ export function OperationsConsole({ initialSnapshot, defaultScheduledAt, role }:
           <div className="mx-auto max-w-7xl p-4 sm:p-7">
             <NoticeBanner notice={notice} />
             <div className={notice ? "mt-5" : ""}>
-              {view === "orders" && <AdminOrders orders={orders} branches={initialSnapshot.branches} technicians={initialSnapshot.technicians} defaultScheduledAt={defaultScheduledAt} onCreate={handleCreateOrder} fieldErrors={orderFieldErrors} onFieldInput={() => setOrderFieldErrors({})} isSaving={isSaving} />}
-              {view === "technician" && <TechnicianJobs activeTechnician={activeTechnician} jobs={technicianJobs} allOrders={orders} completionOrderId={completionOrderId} onCompletionOrderId={setCompletionOrderId} onStart={(order) => advanceOrder(order, "in_progress", activeTechnician?.name ?? "Technician", "Technician started work on site.")} onComplete={handleCompletion} completionFieldErrors={completionFieldErrors} onCompletionFieldInput={() => setCompletionFieldErrors({})} selectedFiles={selectedFiles} onFilesChange={setSelectedFiles} isSaving={isSaving} />}
+              {view === "orders" && <AdminOrders orders={orderRegister} branches={initialSnapshot.branches} technicians={initialSnapshot.technicians} defaultScheduledAt={defaultScheduledAt} onCreate={handleCreateOrder} fieldErrors={orderFieldErrors} onFieldInput={() => setOrderFieldErrors({})} isSaving={isSaving} />}
+              {view === "technician" && <TechnicianJobs activeTechnician={activeTechnician} technicians={initialSnapshot.technicians} onTechnicianChange={changeMockTechnician} jobs={technicianJobs} allOrders={orders} completionOrderId={completionOrderId} onCompletionOrderId={setCompletionOrderId} onStart={(order) => advanceOrder(order, "in_progress", activeTechnician?.name ?? "Technician", "Technician started work on site.")} onComplete={handleCompletion} completionFieldErrors={completionFieldErrors} onCompletionFieldInput={() => setCompletionFieldErrors({})} selectedFiles={selectedFiles} onFilesChange={setSelectedFiles} isSaving={isSaving} />}
               {view === "review" && <ReviewQueue orders={managerQueue} isSaving={isSaving} onReview={(order) => advanceOrder(order, "reviewed", "Manager Demo", "Manager reviewed the completion.")} onClose={(order) => advanceOrder(order, "closed", "Manager Demo", "Manager closed the reviewed job.")} />}
               {view === "dashboard" && <KpiDashboard dashboard={dashboard} reschedules={initialSnapshot.weeklyRescheduleCount} />}
               {view === "ai" && <OperationsAi question={aiQuestion} state={aiState} onQuestionChange={setAiQuestion} onAsk={askAi} />}
@@ -426,10 +435,10 @@ function AdminOrders({ orders, branches, technicians, defaultScheduledAt, onCrea
   </div>;
 }
 
-function TechnicianJobs({ activeTechnician, jobs, allOrders, completionOrderId, onCompletionOrderId, onStart, onComplete, completionFieldErrors, onCompletionFieldInput, selectedFiles, onFilesChange, isSaving }: { activeTechnician: OperationsSnapshot["technicians"][number] | undefined; jobs: ServiceOrder[]; allOrders: ServiceOrder[]; completionOrderId: string | null; onCompletionOrderId: (id: string | null) => void; onStart: (order: ServiceOrder) => void; onComplete: (event: FormEvent<HTMLFormElement>) => void; completionFieldErrors: FieldErrors; onCompletionFieldInput: () => void; selectedFiles: File[]; onFilesChange: (files: File[]) => void; isSaving: boolean }) {
+function TechnicianJobs({ activeTechnician, technicians, onTechnicianChange, jobs, allOrders, completionOrderId, onCompletionOrderId, onStart, onComplete, completionFieldErrors, onCompletionFieldInput, selectedFiles, onFilesChange, isSaving }: { activeTechnician: OperationsSnapshot["technicians"][number] | undefined; technicians: OperationsSnapshot["technicians"]; onTechnicianChange: (technicianId: string) => void; jobs: ServiceOrder[]; allOrders: ServiceOrder[]; completionOrderId: string | null; onCompletionOrderId: (id: string | null) => void; onStart: (order: ServiceOrder) => void; onComplete: (event: FormEvent<HTMLFormElement>) => void; completionFieldErrors: FieldErrors; onCompletionFieldInput: () => void; selectedFiles: File[]; onFilesChange: (files: File[]) => void; isSaving: boolean }) {
   const completionOrder = allOrders.find((order) => order.id === completionOrderId);
   return <div className="space-y-5">
-    <SectionHeading eyebrow="Technician portal" title="Complete work without the desktop clutter" description="This mobile-first route shows only the work assigned to the signed-in technician." action={<span className="self-start rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900">Signed in as {activeTechnician?.name ?? "Technician"}</span>} />
+    <SectionHeading eyebrow="Technician portal" title="Complete work without the desktop clutter" description="Use the assessment switcher to simulate a field user. Only jobs assigned to that technician appear, and only that technician can start or complete them." action={<label className="self-start text-xs font-semibold text-slate-700"><span className="mb-1 block">Mock field user</span><select aria-label="Mock field user" value={activeTechnician?.id ?? ""} onChange={(event) => onTechnicianChange(event.target.value)} className="min-h-10 rounded-xl border border-amber-200 bg-amber-50 px-3 text-sm font-bold text-amber-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100">{technicians.map((technician) => <option key={technician.id} value={technician.id}>{technician.name} · {technician.code}</option>)}</select></label>} />
     <div className="grid gap-4 sm:grid-cols-3"><Metric label="Assigned to you" value={String(jobs.length)} hint="active field jobs" icon={BriefcaseBusiness} /><Metric label="Evidence limit" value="≤ 6" hint="photos, video, or PDF" icon={FileText} /><Metric label="Current user" value={activeTechnician?.name ?? "—"} hint={activeTechnician?.code ?? ""} icon={Wrench} /></div>
     {jobs.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center"><CheckCircle2 className="mx-auto size-7 text-teal-600" /><h2 className="mt-3 font-semibold">No active jobs for this technician</h2><p className="mt-1 text-sm text-slate-500">No new field jobs are currently assigned to this technician.</p></div> : <div className="grid gap-4 xl:grid-cols-2">{jobs.map((order) => <article key={order.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 bg-slate-50 px-4 py-3"><div className="flex items-center justify-between gap-3"><span className="font-mono text-xs font-bold text-teal-700">{order.orderNumber}</span><StatusPill status={order.status} /></div></div><div className="p-4"><p className="text-lg font-semibold tracking-tight">{order.customerName}</p><a className="mt-1 inline-flex items-center gap-1 text-sm text-teal-700 underline-offset-2 hover:underline" href={`tel:${order.customerPhone}`}><Phone className="size-3.5" />{order.customerPhone}</a><p className="mt-4 text-sm leading-6 text-slate-700">{order.address}</p><div className="mt-4 rounded-xl bg-[#f3f7f3] p-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-teal-700">Customer issue</p><p className="mt-1 text-sm leading-5 text-slate-800">{order.issue}</p></div><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-slate-500">Service</dt><dd className="mt-1 font-semibold">{order.serviceType}</dd></div><div><dt className="text-xs text-slate-500">Quoted</dt><dd className="mt-1 font-semibold">{formatRinggit(order.quotedAmountCents)}</dd></div></dl><div className="mt-5">{order.status === "assigned" ? <button disabled={isSaving} type="button" onClick={() => onStart(order)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#123b38] text-sm font-bold text-white"><Wrench className="size-4" />Start job</button> : <button disabled={isSaving} type="button" onClick={() => onCompletionOrderId(order.id)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#dbf06d] text-sm font-bold text-[#123b38]"><CheckCircle2 className="size-4" />Complete service</button>}</div></div></article>)}</div>}
     {completionOrder && <CompletionSheet order={completionOrder} technician={activeTechnician?.name ?? "Technician"} selectedFiles={selectedFiles} onFilesChange={onFilesChange} fieldErrors={completionFieldErrors} onFieldInput={onCompletionFieldInput} onClose={() => onCompletionOrderId(null)} onSubmit={onComplete} isSaving={isSaving} />}
