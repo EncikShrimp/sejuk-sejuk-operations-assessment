@@ -8,6 +8,8 @@ Next.js assessment for a fictional Malaysian air-conditioner service operation. 
 
 The hosted demo uses fictional seeded jobs. Login is an assessment-only role selector, not production authentication.
 
+For a reviewer-facing architecture, feature inventory and exact AI boundary, see [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md).
+
 ## Tech stack
 
 - Next.js 16 + React + TypeScript
@@ -44,7 +46,7 @@ npx supabase db reset
 - Technician field view: narrow mobile-first job list/detail, large touch targets, sticky action bar, completion notes, charges, evidence selection, optional payment and WhatsApp preparation link.
 - Manager workspace: completion review, closure, weekly completed-job/value/reschedule KPIs and technician leaderboard.
 - Audit timeline: creation, assignment, start, completion, payment, notification generation, review, closure and reschedule records.
-- Controlled manager AI: a DeepSeek-backed server route that exposes four validated, named read-only queries.
+- Controlled manager AI: six validated, named read-only capabilities. Deterministic KPI, workload and Supervisor questions bypass model selection; selected question types use DeepSeek server-side only.
 
 ## Data model and security
 
@@ -56,7 +58,7 @@ The completion route enforces a maximum of six job-evidence files, allows images
 
 ## Manager AI controls
 
-`POST /api/manager/ai` calls DeepSeek only when `DEEPSEEK_API_KEY` is configured. It sends the question and named tool definitions, accepts at most one tool call, validates tool arguments with Zod, and executes a bounded Supabase query. There is no arbitrary SQL path.
+`POST /api/manager/ai` is Manager-only. Recognised KPI, workload and Workflow Supervisor wording routes deterministically to a bounded server query. Other supported completion/leaderboard wording uses DeepSeek only when `DEEPSEEK_API_KEY` is configured: it sends the question and named tool definitions, accepts at most one tool call, validates tool arguments with Zod, and executes a bounded Supabase query. There is no arbitrary SQL path.
 
 Supported questions are:
 
@@ -64,8 +66,10 @@ Supported questions are:
 - Completed jobs for `Ali`, `John`, `Bala`, or `Yusoff` in `today`, `this week`, or `last week`.
 - Top technician for one of those periods.
 - Completed-job count for today.
+- Current-week workload watchlist using documented active-team average and threshold.
+- Completed jobs needing Manager review for material price variance or missing job evidence.
 
-Tool results contain only aggregated count/amount data or order number, service type, completion time and amount where needed—never phone numbers, addresses, attachments, credentials or full customer records. When a model formats a selected tool result, it must return an exact copy of the structured result; otherwise the route uses a deterministic formatter. Aggregate money questions take the same bounded, server-side path and use the deterministic formatter directly. Missing configuration and unsupported questions return explicit safe messages.
+Tool results contain only aggregates or narrow order/service facts—never phone numbers, addresses, attachment paths, credentials or full customer records. Money, workload and review-watchlist answers use deterministic server formatting. When a model formats another selected tool result, it must return an exact copy of the structured result; otherwise the route uses a deterministic formatter. Missing configuration and unsupported questions return explicit safe messages.
 
 ## Portal routes
 
@@ -85,6 +89,13 @@ Tool results contain only aggregated count/amount data or order number, service 
 ## Assessment compliance
 
 See [`docs/ASSESSMENT_COMPLIANCE.md`](docs/ASSESSMENT_COMPLIANCE.md) for a requirement-by-requirement, fact-checked assessment matrix. It distinguishes completed local functionality from optional work and production hardening rather than overstating the scope.
+
+## Optional self-assessment
+
+- **Most direct module:** the core lifecycle, because the workflow states, role boundaries and audit trail could be made explicit in the data model before the UI was built.
+- **Hardest module:** Operations AI, because useful questions must be supported without turning the feature into unrestricted database chat. The solution uses a small capability catalogue, strict schemas and safe result shapes instead.
+- **Production improvements:** replace mock sessions with verified identity claims; bind people to technician/manager records; add signed uploads, file scanning, observability, rate limits and PII minimisation for provider calls.
+- **AI used during development:** Hermes/Codex were build and review aids only. The deployed application’s runtime AI provider is DeepSeek, accessed solely from server code. Deterministic workflow and money facts are deliberately computed by application code, not delegated to a model.
 
 ## Limitations and migration path
 

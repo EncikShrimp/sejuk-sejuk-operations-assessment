@@ -4,12 +4,12 @@ import { z } from "zod";
 
 import { formatSafeToolResult, executeReadOnlyToolCall, type SafeToolResult } from "./read-tools";
 import { AI_TECHNICIANS, AI_TOOL_DEFINITIONS, validateToolCall } from "./tool-contracts";
-import { completionSummaryCallForQuestion } from "./query-intent";
+import { completionSummaryCallForQuestion, workflowReviewWatchlistCallForQuestion, workloadCallForQuestion } from "./query-intent";
 import { hasSupabaseConfiguration } from "@/lib/supabase/server";
 
 const questionSchema = z.string().trim().min(3).max(500);
 
-const guidance = `I can answer completed-job lists for ${AI_TECHNICIANS.join(", ")}; the top technician; completed-job counts; and total completed-job amounts for today, this week, last week, or all time.`;
+const guidance = `I can answer completed-job lists for ${AI_TECHNICIANS.join(", ")}; the top technician; completed-job counts; total completed-job amounts for today, this week, last week, or all time; this week's technician workload watchlist; and completed jobs needing Manager review.`;
 
 type DeepSeekMessage = {
   content?: string | null;
@@ -18,7 +18,7 @@ type DeepSeekMessage = {
 
 function isSupportedQuestion(question: string): boolean {
   const normalized = question.toLowerCase();
-  return Boolean(completionSummaryCallForQuestion(question)) || (normalized.includes("complet") && (normalized.includes("job") || normalized.includes("today"))) || normalized.includes("top technician");
+  return Boolean(completionSummaryCallForQuestion(question)) || Boolean(workloadCallForQuestion(question)) || Boolean(workflowReviewWatchlistCallForQuestion(question)) || (normalized.includes("complet") && (normalized.includes("job") || normalized.includes("today"))) || normalized.includes("top technician");
 }
 
 async function callDeepSeek(body: unknown): Promise<DeepSeekMessage> {
@@ -67,13 +67,26 @@ export async function answerOperationsQuestion(input: unknown) {
   const question = questionSchema.parse(input);
   if (!isSupportedQuestion(question)) return { status: "guidance" as const, message: guidance };
   if (!hasSupabaseConfiguration()) return { status: "unavailable" as const, message: "Supabase is not configured, so manager AI retrieval is unavailable." };
-  if (!process.env.DEEPSEEK_API_KEY) return { status: "unavailable" as const, message: "DeepSeek is not configured. Add DEEPSEEK_API_KEY to use the manager query window." };
 
   const completionSummaryCall = completionSummaryCallForQuestion(question);
   if (completionSummaryCall) {
     const result = await executeReadOnlyToolCall(completionSummaryCall);
     return { status: "answer" as const, answer: formatSafeToolResult(result), result };
   }
+
+  const workloadCall = workloadCallForQuestion(question);
+  if (workloadCall) {
+    const result = await executeReadOnlyToolCall(workloadCall);
+    return { status: "answer" as const, answer: formatSafeToolResult(result), result };
+  }
+
+  const workflowWatchlistCall = workflowReviewWatchlistCallForQuestion(question);
+  if (workflowWatchlistCall) {
+    const result = await executeReadOnlyToolCall(workflowWatchlistCall);
+    return { status: "answer" as const, answer: formatSafeToolResult(result), result };
+  }
+
+  if (!process.env.DEEPSEEK_API_KEY) return { status: "unavailable" as const, message: "DeepSeek is not configured. Add DEEPSEEK_API_KEY to use model-selected Operations AI queries." };
 
   const selection = await callDeepSeek({
     model: process.env.DEEPSEEK_MODEL || "deepseek-chat",

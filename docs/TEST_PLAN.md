@@ -42,15 +42,19 @@ Run this after local Supabase has been reset with seed data and the application 
 - [ ] Close action is available only after review.
 - [ ] KPI cards show weekly completed job count, final value and reschedules.
 - [ ] Leaderboard values reconcile with seeded completions.
+- [ ] Workflow Supervisor labels a reviewable job only when its final amount crosses both documented material-variance thresholds or it has zero `job_evidence` attachments.
+- [ ] Workflow Supervisor labels are review signals only: they do not alter job status, contact a customer or accuse a technician.
 
 ## Operations AI
 
 - [ ] Technician and Admin roles cannot submit Operations AI questions.
-- [ ] With no DeepSeek runtime key, the UI reports configuration unavailable, not a fabricated result.
-- [ ] With a key configured, test the three supported question patterns:
+- [ ] Deterministic KPI, workload and Workflow Supervisor questions work from configured Supabase data without a model request.
+- [ ] With a key configured, test model-selected question patterns:
   - What jobs did technician Ali complete last week?
   - Which technician completed the most jobs this week?
-  - How many jobs were completed today?
+- [ ] Test deterministic advanced question patterns:
+  - Which technician might be overloaded this week?
+  - Which completed jobs need Manager review?
 - [ ] Unsupported questions receive a limited-capability guidance answer.
 - [ ] Network inspection confirms no DeepSeek key, Supabase service key, phone number or address is returned to the browser from AI responses.
 

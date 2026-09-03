@@ -5,16 +5,16 @@ Build a credible internal operations web application for a fictional Malaysian a
 
 `New → Assigned → In Progress → Job Done → Reviewed → Closed`
 
-This is a focused assessment implementation, not a production claim. It must work locally with Supabase and contain realistic seeded demo records.
+This is a focused assessment implementation, not a production claim. It works with Supabase-backed fictional seeded demo records locally and on the hosted Vercel assessment demo.
 
 ## Technology boundaries
 
 - Next.js App Router, TypeScript, Tailwind CSS.
-- Supabase local stack first: Postgres, private Storage bucket, migration-led schema, seed data.
+- Supabase: Postgres, private Storage bucket, migration-led schema and fictional seed data. The same migration history is applied to the hosted assessment project.
 - Mock role selector only: Admin, Technician, Manager. Do not imply real authentication.
 - DeepSeek is the manager AI provider, called exclusively from a server-side route with `DEEPSEEK_API_KEY`. No Codex/OpenAI runtime dependency belongs in the app.
 - WhatsApp is a `wa.me` deep-link that pre-fills a message. It prepares a message; it does not claim automatic delivery.
-- No deploy, cloud migration, or production credential configuration in this phase.
+- The assessment is hosted on Vercel with server-only Supabase/DeepSeek configuration. This does not convert the mock login into production authentication.
 
 ## Data and integrity requirements
 
@@ -60,6 +60,8 @@ The manager-only Query Window supports the assessment examples:
 2. Top technician in a period.
 3. Completed-job count for today.
 4. Completed-job count plus total final amount for today, this week, last week, or all time.
+5. Current-week workload watchlist using active assignments and a documented threshold.
+6. Completed-job Manager review watchlist for material price variance or missing job evidence.
 
 The DeepSeek model receives only question text and named tools. It can select at most one read-only tool:
 
@@ -67,8 +69,10 @@ The DeepSeek model receives only question text and named tools. It can select at
 - `get_top_technician({ period })`
 - `count_completed_jobs({ date })`
 - `get_completion_summary({ period })`
+- `get_technician_workload({ period: "this_week" })`
+- `get_workflow_review_watchlist({})`
 
-Zod validates tool arguments before a bounded Supabase query runs. The model never receives database credentials, arbitrary SQL, attachments, full customer records, phone numbers, or addresses. It sees only the small structured result needed to format its answer. If no DeepSeek key exists, return an explicit configured-unavailable response. Unsupported questions receive a safe guidance response.
+Zod validates tool arguments before a bounded Supabase query runs. The model never receives database credentials, arbitrary SQL, attachments, full customer records, phone numbers, or addresses. Recognised money, workload and watchlist questions use deterministic server routing/formatting; DeepSeek is required only for model-selected supported question types. Unsupported questions receive a safe guidance response.
 
 ## UI direction
 

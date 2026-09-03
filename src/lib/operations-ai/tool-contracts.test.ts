@@ -43,4 +43,20 @@ describe("operations AI tool contracts", () => {
       arguments: { date: "today" },
     });
   });
+
+  it("accepts workflow review watchlist queries without free-form filters", () => {
+    expect(validateToolCall({ name: "get_workflow_review_watchlist", arguments: {} })).toEqual({
+      name: "get_workflow_review_watchlist",
+      arguments: {},
+    });
+    expect(() => validateToolCall({ name: "get_workflow_review_watchlist", arguments: { status: "closed" } })).toThrow();
+  });
+
+  it("accepts workload insight only for the current week", () => {
+    expect(validateToolCall({ name: "get_technician_workload", arguments: { period: "this_week" } })).toEqual({
+      name: "get_technician_workload",
+      arguments: { period: "this_week" },
+    });
+    expect(() => validateToolCall({ name: "get_technician_workload", arguments: { period: "last_week" } })).toThrow();
+  });
 });

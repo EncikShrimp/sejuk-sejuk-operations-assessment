@@ -44,6 +44,7 @@ export type ServiceOrder = {
   scheduledAt: string;
   completedAt: string | null;
   createdAt: string;
+  evidenceFileCount?: number;
   workDoneNotes?: string | null;
   remarks?: string | null;
   payment?: {

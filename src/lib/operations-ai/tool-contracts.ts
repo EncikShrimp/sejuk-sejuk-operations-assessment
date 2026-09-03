@@ -25,6 +25,14 @@ const toolCallSchema = z.discriminatedUnion("name", [
     name: z.literal("count_completed_jobs"),
     arguments: z.object({ date: z.literal("today") }).strict(),
   }),
+  z.object({
+    name: z.literal("get_technician_workload"),
+    arguments: z.object({ period: z.literal("this_week") }).strict(),
+  }),
+  z.object({
+    name: z.literal("get_workflow_review_watchlist"),
+    arguments: z.object({}).strict(),
+  }),
 ]);
 
 export type ValidatedToolCall = z.infer<typeof toolCallSchema>;
@@ -64,6 +72,22 @@ export const AI_TOOL_DEFINITIONS = [
       name: "count_completed_jobs",
       description: "Count jobs completed today only.",
       parameters: { type: "object", properties: { date: { type: "string", enum: ["today"] } }, required: ["date"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_technician_workload",
+      description: "Identify current-week technician workload watchlist entries from active assignments using a fixed server-side heuristic.",
+      parameters: { type: "object", properties: { period: { type: "string", enum: ["this_week"] } }, required: ["period"], additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_workflow_review_watchlist",
+      description: "List completed jobs with server-derived Manager review signals for material price variance or missing job evidence. No customer details are available.",
+      parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
     },
   },
 ] as const;

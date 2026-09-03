@@ -1,19 +1,28 @@
 import "server-only";
 
 import { getPeriodBounds } from "@/lib/domain/date-period";
-import { formatRinggit } from "@/lib/domain/money";
+import { getWorkflowSupervisorFlags } from "@/lib/domain/workflow-supervisor";
+import type { OrderStatus } from "@/lib/domain/types";
 import { createServerSupabaseClient, hasSupabaseConfiguration } from "@/lib/supabase/server";
 
 import type { ValidatedToolCall } from "./tool-contracts";
+import { deriveWorkloadInsight } from "./workload-insight";
+import type { SafeToolResult } from "./tool-results";
+
+export { formatSafeToolResult } from "./tool-results";
+export type { SafeToolResult } from "./tool-results";
 
 type CompletedJob = { order_number: string; service_type: string; final_amount_cents: number; completed_at: string };
 type CompletionSummaryRow = { completed_jobs: number; total_amount_cents: number };
-
-export type SafeToolResult =
-  | { kind: "completed_jobs"; technician: string; period: string; jobs: { orderNumber: string; serviceType: string; finalAmountCents: number; completedAt: string }[] }
-  | { kind: "completion_summary"; period: "today" | "this_week" | "last_week" | "all_time"; completedJobs: number; totalAmountCents: number }
-  | { kind: "top_technician"; period: string; technician: string | null; completedJobs: number }
-  | { kind: "completed_job_count"; date: "today"; count: number };
+type TechnicianRow = { id: string; name: string };
+type AssignedOrderRow = { assigned_technician_id: string | null };
+type SupervisorOrderRow = {
+  order_number: string;
+  status: OrderStatus;
+  quoted_amount_cents: number;
+  final_amount_cents: number;
+  service_completions: { job_attachments: { kind: "job_evidence" | "payment_receipt" }[] | null }[] | null;
+};
 
 function assertAiDataAvailable(): void {
   if (!hasSupabaseConfiguration()) throw new Error("AI_DATA_UNAVAILABLE");
@@ -22,6 +31,69 @@ function assertAiDataAvailable(): void {
 export async function executeReadOnlyToolCall(call: ValidatedToolCall): Promise<SafeToolResult> {
   assertAiDataAvailable();
   const client = createServerSupabaseClient();
+
+  if (call.name === "get_technician_workload") {
+    const { start, end } = getPeriodBounds("this_week");
+    const [techniciansResult, activeOrdersResult, completedOrdersResult] = await Promise.all([
+      client.from("technicians").select("id, name").eq("active", true).order("name"),
+      client
+        .from("service_orders")
+        .select("assigned_technician_id")
+        .in("status", ["assigned", "in_progress"])
+        .gte("scheduled_at", start.toISOString())
+        .lt("scheduled_at", end.toISOString()),
+      client
+        .from("service_orders")
+        .select("assigned_technician_id")
+        .not("completed_at", "is", null)
+        .gte("completed_at", start.toISOString())
+        .lt("completed_at", end.toISOString()),
+    ]);
+    if (techniciansResult.error || activeOrdersResult.error || completedOrdersResult.error) throw new Error("AI query could not be completed.");
+
+    const activeCounts = new Map<string, number>();
+    for (const row of (activeOrdersResult.data ?? []) as AssignedOrderRow[]) {
+      if (row.assigned_technician_id) activeCounts.set(row.assigned_technician_id, (activeCounts.get(row.assigned_technician_id) ?? 0) + 1);
+    }
+    const completedCounts = new Map<string, number>();
+    for (const row of (completedOrdersResult.data ?? []) as AssignedOrderRow[]) {
+      if (row.assigned_technician_id) completedCounts.set(row.assigned_technician_id, (completedCounts.get(row.assigned_technician_id) ?? 0) + 1);
+    }
+    const insight = deriveWorkloadInsight(
+      ((techniciansResult.data ?? []) as TechnicianRow[]).map((technician) => ({
+        technician: technician.name,
+        activeJobs: activeCounts.get(technician.id) ?? 0,
+        completedJobs: completedCounts.get(technician.id) ?? 0,
+      })),
+    );
+    return { kind: "workload_insight", period: "this_week", ...insight };
+  }
+
+  if (call.name === "get_workflow_review_watchlist") {
+    const { data, error } = await client
+      .from("service_orders")
+      .select("order_number, status, quoted_amount_cents, final_amount_cents, service_completions(job_attachments(kind))")
+      .in("status", ["job_done", "reviewed"])
+      .order("completed_at", { ascending: false })
+      .limit(100);
+    if (error) throw new Error("AI query could not be completed.");
+
+    const jobs = ((data ?? []) as unknown as SupervisorOrderRow[])
+      .map((order) => {
+        const evidenceFileCount = order.service_completions?.[0]?.job_attachments?.filter((attachment) => attachment.kind === "job_evidence").length ?? 0;
+        return {
+          orderNumber: order.order_number,
+          flags: getWorkflowSupervisorFlags({
+            status: order.status,
+            quotedAmountCents: order.quoted_amount_cents,
+            finalAmountCents: order.final_amount_cents,
+            evidenceFileCount,
+          }),
+        };
+      })
+      .filter((order) => order.flags.length > 0);
+    return { kind: "workflow_review_watchlist", jobs };
+  }
 
   if (call.name === "get_completion_summary") {
     const bounds = call.arguments.period === "all_time" ? null : getPeriodBounds(call.arguments.period);
@@ -82,17 +154,4 @@ export async function executeReadOnlyToolCall(call: ValidatedToolCall): Promise<
   }
   const top = [...leaderboard.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
   return { kind: "top_technician", period: call.arguments.period, technician: top?.[0] ?? null, completedJobs: top?.[1] ?? 0 };
-}
-
-export function formatSafeToolResult(result: SafeToolResult): string {
-  if (result.kind === "completion_summary") {
-    const period = result.period === "all_time" ? "all time" : result.period.replace("_", " ");
-    return `${result.completedJobs} job${result.completedJobs === 1 ? " was" : "s were"} completed in ${period}, with a total final amount of ${formatRinggit(result.totalAmountCents)}.`;
-  }
-  if (result.kind === "completed_job_count") return `${result.count} job${result.count === 1 ? " was" : "s were"} completed today.`;
-  if (result.kind === "top_technician") {
-    return result.technician ? `${result.technician} is top for ${result.period.replace("_", " ")} with ${result.completedJobs} completed job${result.completedJobs === 1 ? "" : "s"}.` : `No completed jobs were found for ${result.period.replace("_", " ")}.`;
-  }
-  if (result.jobs.length === 0) return `No completed jobs were found for ${result.technician} in ${result.period.replace("_", " ")}.`;
-  return `${result.technician} completed ${result.jobs.length} job${result.jobs.length === 1 ? "" : "s"} in ${result.period.replace("_", " ")}: ${result.jobs.map((job) => `${job.orderNumber} – ${job.serviceType}`).join("; ")}.`;
 }

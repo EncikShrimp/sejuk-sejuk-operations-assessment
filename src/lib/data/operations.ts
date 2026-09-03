@@ -22,7 +22,7 @@ type QueryOrder = {
   completed_at: string | null;
   created_at: string;
   technicians: { id: string; name: string } | null;
-  service_completions: { work_done_notes: string; remarks: string | null }[] | null;
+  service_completions: { work_done_notes: string; remarks: string | null; job_attachments: { id: string; kind: "job_evidence" | "payment_receipt" }[] | null }[] | null;
   payment_records: { amount_cents: number; method: string }[] | null;
   audit_events: { id: string; event_type: string; actor_label: string; detail: string; created_at: string }[] | null;
 };
@@ -48,6 +48,7 @@ function mapOrder(row: QueryOrder): ServiceOrder {
     scheduledAt: row.scheduled_at,
     completedAt: row.completed_at,
     createdAt: row.created_at,
+    evidenceFileCount: completion?.job_attachments?.filter((attachment) => attachment.kind === "job_evidence").length ?? 0,
     workDoneNotes: completion?.work_done_notes ?? null,
     remarks: completion?.remarks ?? null,
     payment: payment ? { amountCents: payment.amount_cents, method: payment.method, receiptRecorded: true } : null,
@@ -64,7 +65,7 @@ export async function getOperationsSnapshot(): Promise<OperationsSnapshot> {
     const [branchesResult, techniciansResult, ordersResult, reschedulesResult] = await Promise.all([
       client.from("branches").select("id, name, city").order("name"),
       client.from("technicians").select("id, name, employee_code, active, branches(name)").order("name"),
-      client.from("service_orders").select("id, order_number, status, customer_name, customer_phone, address, issue, service_type, quoted_amount_cents, extra_charges_cents, final_amount_cents, admin_notes, scheduled_at, completed_at, created_at, technicians(id, name), service_completions(work_done_notes, remarks), payment_records(amount_cents, method), audit_events(id, event_type, actor_label, detail, created_at)").order("scheduled_at", { ascending: true }),
+      client.from("service_orders").select("id, order_number, status, customer_name, customer_phone, address, issue, service_type, quoted_amount_cents, extra_charges_cents, final_amount_cents, admin_notes, scheduled_at, completed_at, created_at, technicians(id, name), service_completions(work_done_notes, remarks, job_attachments(id, kind)), payment_records(amount_cents, method), audit_events(id, event_type, actor_label, detail, created_at)").order("scheduled_at", { ascending: true }),
       client.from("reschedule_events").select("id", { count: "exact", head: true }).gte("created_at", start.toISOString()),
     ]);
 
