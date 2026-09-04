@@ -40,13 +40,17 @@ npm run build
 npx supabase db reset
 ```
 
-## Modules built
+## Assessment modules
 
-- Admin desk: create, quote, assign and inspect service orders with a post-submit handoff summary.
-- Technician field view: narrow mobile-first job list/detail, large touch targets, sticky action bar, completion notes, charges, evidence selection, optional payment and WhatsApp preparation link.
-- Manager workspace: completion review, closure, weekly completed-job/value/reschedule KPIs and technician leaderboard.
-- Audit timeline: creation, assignment, start, completion, payment, notification generation, review, closure and reschedule records.
-- Controlled manager AI: six validated, named read-only capabilities. Deterministic KPI, workload and Supervisor questions bypass model selection; selected question types use DeepSeek server-side only.
+This delivery has **five assessment-facing modules**:
+
+1. **Admin Portal** — create, quote, assign and inspect service orders with a post-submit handoff summary.
+2. **Technician Portal** — task-first mobile work surface: the current job comes first, other assignments sit under “Up next”, and service completion opens as a full-height mobile task sheet with large touch controls.
+3. **WhatsApp completion message** — a prepared `wa.me` customer-feedback message after completion; a person still presses Send.
+4. **Manager workspace and KPI reporting** — review and close completed jobs, inspect weekly completed-job/value/reschedule KPIs, and view the technician leaderboard.
+5. **Controlled Manager AI** — six validated, named read-only capabilities for supported operational questions.
+
+The immutable audit timeline is a cross-cutting record of creation, assignment, start, completion, payment, notification generation, review, closure and reschedule events.
 
 ## Data model and security
 
@@ -70,6 +74,15 @@ Supported questions are:
 - Completed jobs needing Manager review for material price variance or missing job evidence.
 
 Tool results contain only aggregates or narrow order/service facts—never phone numbers, addresses, attachment paths, credentials or full customer records. Money, workload and review-watchlist answers use deterministic server formatting. When a model formats another selected tool result, it must return an exact copy of the structured result; otherwise the route uses a deterministic formatter. Missing configuration and unsupported questions return explicit safe messages.
+
+### Advanced AI challenges
+
+**Two of the three optional Advanced AI challenges are implemented:**
+
+- **Operational Insight** — a documented current-week technician workload watchlist based on active jobs, completed jobs, team average and a fixed threshold. It advises the Manager; it never auto-assigns or reschedules work.
+- **Workflow Supervisor** — deterministic Manager-review signals for material final-vs-quoted variance or missing job evidence. Signals say “Needs Manager review”; they never accuse a technician or change workflow status.
+
+**Document Understanding is not included.** It was deferred because secure document ingestion, extraction quality controls, PII policy and human confirmation need more than the assessment scope.
 
 ## Portal routes
 
