@@ -1,22 +1,51 @@
 # Sejuk Sejuk Operations Assessment
 
-Next.js assessment for a fictional Malaysian air-conditioner service operation. It demonstrates the workflow `New → Assigned → In Progress → Job Done → Reviewed → Closed`; it is not a production-auth claim.
+A fictional Malaysian air-conditioner service workflow built for the programmer assessment.
 
-## Live demo
+**[Open the live demo](https://sejuk-sejuk-operations-assessment.vercel.app)**
 
-[Open the live assessment demo](https://sejuk-sejuk-operations-assessment.vercel.app)
+> The demo uses fictional seed data. Its role picker is assessment-only; it is not production authentication.
 
-The hosted demo uses fictional seeded jobs. Login is an assessment-only role selector, not production authentication.
+## Core workflow
 
-For a reviewer-facing architecture, feature inventory and exact AI boundary, see [docs/SYSTEM_OVERVIEW.md](docs/SYSTEM_OVERVIEW.md).
+```text
+Admin creates and assigns a job
+→ assigned Technician starts and completes it
+→ Manager reviews and closes it
+```
 
-## Tech stack
+The application enforces:
 
-- Next.js 16 + React + TypeScript
-- Tailwind CSS v4
-- Supabase (Postgres, private Storage, versioned migrations and fictional demo seed data)
-- DeepSeek, server-side only, for the bounded Operations AI query window
-- Vitest, ESLint and TypeScript checks
+- `New → Assigned → In Progress → Job Done → Reviewed → Closed`
+- Admin-only creation and assignment
+- assigned-Technician-only start and completion
+- Manager-only review and closure
+- quote + extra charges = final amount, stored in integer cents
+
+## What is included
+
+- **Admin:** create a job, quote it, assign a technician, and see the handoff.
+- **Technician:** a task-first mobile view. The current job comes first; completion uses a full-height mobile task sheet.
+- **Manager:** review and close completed jobs, view weekly KPIs, and inspect the technician leaderboard.
+- **WhatsApp v1:** a prepared customer-feedback `wa.me` link. A person still presses Send.
+- **Audit trail:** records the key lifecycle actions.
+
+## Controlled Operations AI
+
+Manager AI supports six fixed, read-only operational questions: completed-job lookups, counts, totals, top technician, workload, and a review watchlist.
+
+The model never receives database credentials or direct access. It cannot run SQL, browse records freely, access files, see customer phone numbers/addresses, or write data. The server owns role checks, validation, query scope, calculations, and safe result formatting.
+
+### Advanced AI extensions
+
+Implemented:
+
+- **Operational Insight** — highlights a technician workload watchlist for the current week.
+- **Workflow Supervisor** — flags completed work with a material price variance or missing job evidence as **Needs Manager review**.
+
+Not included:
+
+- **Document Understanding** — document extraction needs secure ingestion, PII handling, extraction checks, and human confirmation beyond this assessment scope.
 
 ## Run locally
 
@@ -28,90 +57,22 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Use the local Supabase API URL and service-role key in `.env.local`. They are server-only values: do not prefix them with `NEXT_PUBLIC_` and do not put them in browser code. Without `.env.local`, the app deliberately renders its seeded demo snapshot and marks preview changes as reset-on-refresh. Write routes return a safe `503` response in that mode.
-
-Run the delivery checks with:
+Set the local Supabase values in `.env.local`. Keep the service-role key server-side; never add `NEXT_PUBLIC_` to it.
 
 ```powershell
 npm run lint
 npm test
 npm run typecheck
 npm run build
-npx supabase db reset
 ```
 
-## Assessment modules
+## Scope and limits
 
-This delivery has **five assessment-facing modules**:
+- Mock roles are for assessment demonstration, not real identity enforcement.
+- WhatsApp prepares a message; it does not send one automatically.
+- The public demo is mutable fictional data, not a production operations system.
 
-1. **Admin Portal** — create, quote, assign and inspect service orders with a post-submit handoff summary.
-2. **Technician Portal** — task-first mobile work surface: the current job comes first, other assignments sit under “Up next”, and service completion opens as a full-height mobile task sheet with large touch controls.
-3. **WhatsApp completion message** — a prepared `wa.me` customer-feedback message after completion; a person still presses Send.
-4. **Manager workspace and KPI reporting** — review and close completed jobs, inspect weekly completed-job/value/reschedule KPIs, and view the technician leaderboard.
-5. **Controlled Manager AI** — six validated, named read-only capabilities for supported operational questions.
+## Detailed review documents
 
-The immutable audit timeline is a cross-cutting record of creation, assignment, start, completion, payment, notification generation, review, closure and reschedule events.
-
-## Data model and security
-
-`supabase/migrations/20260902123000_operations_schema.sql` creates branches, technicians, service orders, completions, job attachments, payment records, manager reviews, reschedules and immutable audit events. Order status is a PostgreSQL enum; quote, extra charges, final amount and payments are integer cents. The final amount is a stored generated expression of quote plus extras.
-
-Order numbers come from a database sequence/trigger. RLS is enabled for every application table and anonymous/authenticated direct privileges are revoked. `job-evidence` is a private storage bucket; only the service role may access it. The application only creates the Supabase client in `src/lib/supabase/server.ts`, which is marked server-only. The browser never receives the service-role key.
-
-The completion route enforces a maximum of six job-evidence files, allows images/video/PDF only, and rejects files over 20 MB. It writes the completion timestamp, server-calculated final amount, optional payment, audit events and a notification-generation audit event. The WhatsApp action is a `wa.me` deep link only; it prepares a message and never claims delivery.
-
-## Manager AI controls
-
-`POST /api/manager/ai` is Manager-only. Recognised KPI, workload and Workflow Supervisor wording routes deterministically to a bounded server query. Other supported completion/leaderboard wording uses DeepSeek only when `DEEPSEEK_API_KEY` is configured: it sends the question and named tool definitions, accepts at most one tool call, validates tool arguments with Zod, and executes a bounded Supabase query. There is no arbitrary SQL path.
-
-Supported questions are:
-
-- Completed-job count **and** total final amount for `today`, `this week`, `last week`, or `all time`.
-- Completed jobs for `Ali`, `John`, `Bala`, or `Yusoff` in `today`, `this week`, or `last week`.
-- Top technician for one of those periods.
-- Completed-job count for today.
-- Current-week workload watchlist using documented active-team average and threshold.
-- Completed jobs needing Manager review for material price variance or missing job evidence.
-
-Tool results contain only aggregates or narrow order/service facts—never phone numbers, addresses, attachment paths, credentials or full customer records. Money, workload and review-watchlist answers use deterministic server formatting. When a model formats another selected tool result, it must return an exact copy of the structured result; otherwise the route uses a deterministic formatter. Missing configuration and unsupported questions return explicit safe messages.
-
-### Advanced AI challenges
-
-**Two of the three optional Advanced AI challenges are implemented:**
-
-- **Operational Insight** — a documented current-week technician workload watchlist based on active jobs, completed jobs, team average and a fixed threshold. It advises the Manager; it never auto-assigns or reschedules work.
-- **Workflow Supervisor** — deterministic Manager-review signals for material final-vs-quoted variance or missing job evidence. Signals say “Needs Manager review”; they never accuse a technician or change workflow status.
-
-**Document Understanding is not included.** It was deferred because secure document ingestion, extraction quality controls, PII policy and human confirmation need more than the assessment scope.
-
-## Portal routes
-
-- `/login` — select the Admin, Technician, or Manager assessment role.
-- `/admin` — order creation and technician assignment; only available to the Admin mock session.
-- `/technician` — assigned field-work and completion workflow; only available to the Technician mock session.
-- `/manager` — review queue, KPI dashboard, and Operations AI; only available to the Manager mock session.
-- `/` — redirects to the signed-in role’s portal, or to `/login` when no mock session exists.
-
-## Assessment assumptions
-
-- This is a local assessment implementation using a cookie-backed mock role session, not a production identity system.
-- A technician must be selected during the normal Admin handoff, so new Admin-created jobs enter the assigned field workflow immediately. The `New` state remains in the model for unassigned/draft records and validation coverage.
-- WhatsApp v1 is a human-sent `wa.me` deep link. It does not claim automated delivery.
-- Money is stored as integer cents, reporting periods use `Asia/Kuala_Lumpur`, and local seed data is illustrative only.
-
-## Assessment compliance
-
-See [`docs/ASSESSMENT_COMPLIANCE.md`](docs/ASSESSMENT_COMPLIANCE.md) for a requirement-by-requirement, fact-checked assessment matrix. It distinguishes completed local functionality from optional work and production hardening rather than overstating the scope.
-
-## Optional self-assessment
-
-- **Most direct module:** the core lifecycle, because the workflow states, role boundaries and audit trail could be made explicit in the data model before the UI was built.
-- **Hardest module:** Operations AI, because useful questions must be supported without turning the feature into unrestricted database chat. The solution uses a small capability catalogue, strict schemas and safe result shapes instead.
-- **Production improvements:** replace mock sessions with verified identity claims; bind people to technician/manager records; add signed uploads, file scanning, observability, rate limits and PII minimisation for provider calls.
-- **AI used during development:** Hermes/Codex were build and review aids only. The deployed application’s runtime AI provider is DeepSeek, accessed solely from server code. Deterministic workflow and money facts are deliberately computed by application code, not delegated to a model.
-
-## Limitations and migration path
-
-The assessment uses a real `/login` route with a cookie-backed mock role session. It survives browser refresh, server-side redirects unauthorised role URLs to the signed-in role's portal, and gates Admin/Technician/Manager write routes against the selected mock role; it is still not production authentication or authorization. Upload handling is intentionally route-based; a production implementation should add verified identities, person-to-technician bindings, per-user RLS policies, signed read URLs, antivirus/media processing, transactional outbox notifications, observability and real WhatsApp delivery controls.
-
-For cloud migration, create a hosted Supabase project, apply the migration through the Supabase CLI, run the seed only in non-production, set server-only environment variables in the host, replace the mock selector with verified session/role claims, then tighten the storage/table policies to those real identities.
+- [System overview](docs/SYSTEM_OVERVIEW.md) — architecture, workflow, data choices, and exact AI controls.
+- [Assessment compliance](docs/ASSESSMENT_COMPLIANCE.md) — requirement-by-requirement implementation status.
